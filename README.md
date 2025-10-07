@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ZenQuery - Intelligent Document Q&A
 
-## Getting Started
+Transform your documents into intelligent conversations powered by Claude Sonnet 4.5.
 
-First, run the development server:
+## Features
+
+- 📄 **Upload PDFs and Word documents**
+- ✨ **Instant executive summaries**
+- 💬 **Precise Q&A with citations**
+- 🎯 **Zero hallucinations** - only facts from your documents
+- 🚀 **Sleek, modern UI** - built with Next.js and Tailwind CSS
+
+## Quick Start
+
+### 1. Install Dependencies
+
+```bash
+npm install
+```
+
+### 2. Set Up Environment Variables
+
+Create a `.env.local` file in the root directory:
+
+```bash
+ANTHROPIC_API_KEY=your_api_key_here
+```
+
+Get your API key from [Anthropic Console](https://console.anthropic.com/)
+
+### 3. Run the Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## How It Works
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. **Upload** - Drag and drop or select a PDF/Word document
+2. **Summary** - Get an instant executive summary powered by Claude
+3. **Ask** - Type questions and get precise answers with exact document citations
+4. **Verify** - Every answer includes references to the exact location in your document
 
-## Learn More
+## Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **Styling**: Tailwind CSS, Shadcn UI
+- **AI**: Claude Sonnet 4.5 (Anthropic)
+- **Document Processing**: pdf-parse, mammoth
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Vercel (Recommended)
 
-## Deploy on Vercel
+1. Push your code to GitHub
+2. Import project in [Vercel](https://vercel.com)
+3. Add `ANTHROPIC_API_KEY` environment variable
+4. Deploy!
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Other Platforms
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The app can be deployed to any platform that supports Next.js:
+- Netlify
+- Railway
+- AWS Amplify
+- Digital Ocean
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key | Yes |
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+```
+
+## License
+
+MIT
+
+## Support
+
+For issues and questions, please open an issue on GitHub.
+
+---
+
+Built with ❤️ using Claude Code
