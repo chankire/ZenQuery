@@ -1,4 +1,4 @@
-# ZenQuery - Intelligent Document Q&A
+# ZenQuery - AI-Powered Document Intelligence Platform
 
 Transform your documents into intelligent conversations powered by Claude Sonnet 4.5.
 
