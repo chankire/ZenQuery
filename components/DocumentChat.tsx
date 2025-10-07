@@ -27,6 +27,7 @@ interface Message {
 
 interface DocumentChatProps {
   fileName: string;
+  documentId: string;
   fileUrl: string;
   summary: string;
   isProcessing: boolean;
@@ -35,6 +36,7 @@ interface DocumentChatProps {
 
 export default function DocumentChat({
   fileName,
+  documentId,
   fileUrl,
   summary,
   isProcessing,
@@ -68,7 +70,7 @@ export default function DocumentChat({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           question: input,
-          fileName,
+          documentId,
         }),
       });
 

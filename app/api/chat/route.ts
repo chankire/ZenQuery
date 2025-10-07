@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@/lib/supabase/server';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -7,23 +8,31 @@ const anthropic = new Anthropic({
 
 export async function POST(request: NextRequest) {
   try {
-    const { question, fileName } = await request.json();
+    // Check authentication
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    if (!question || !fileName) {
-      return NextResponse.json(
-        { error: 'Missing question or fileName' },
-        { status: 400 }
-      );
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Retrieve the document text from cache
-    const documentText = global.documentCache?.[fileName];
+    const { question, documentId } = await request.json();
 
-    if (!documentText) {
-      return NextResponse.json(
-        { error: 'Document not found. Please re-upload the document.' },
-        { status: 404 }
-      );
+    if (!question || !documentId) {
+      return NextResponse.json({ error: 'Missing question or documentId' }, { status: 400 });
+    }
+
+    // Retrieve the document (with RLS ensuring user can only access their own documents)
+    const { data: document, error: docError } = await supabase
+      .from('documents')
+      .select('extracted_text, file_name')
+      .eq('id', documentId)
+      .single();
+
+    if (docError || !document) {
+      return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
     // Query Claude with the document context
@@ -44,7 +53,7 @@ CRITICAL RULES:
 6. If you're uncertain, say so - never hallucinate or guess
 
 Document content:
-${documentText.slice(0, 100000)}
+${document.extracted_text.slice(0, 100000)}
 
 ---
 
@@ -58,9 +67,8 @@ Please provide:
       ],
     });
 
-    const responseText = message.content[0].type === 'text'
-      ? message.content[0].text
-      : 'Unable to generate response';
+    const responseText =
+      message.content[0].type === 'text' ? message.content[0].text : 'Unable to generate response';
 
     // Extract structured citations with page numbers and snippets
     const citations: Array<{ text: string; page?: number; snippet?: string }> = [];
@@ -85,11 +93,38 @@ Please provide:
     const sectionRegex = /(Section|Chapter)\s+([\d\w\.\-]+)/gi;
     while ((match = sectionRegex.exec(responseText)) !== null) {
       const citationText = match[0];
-      if (!citations.find(c => c.text === citationText)) {
+      if (!citations.find((c) => c.text === citationText)) {
         citations.push({
           text: citationText,
         });
       }
+    }
+
+    // Save the conversation
+    const { data: conversation } = await supabase
+      .from('conversations')
+      .insert({
+        user_id: user.id,
+        document_id: documentId,
+      })
+      .select()
+      .single();
+
+    if (conversation) {
+      // Save messages
+      await supabase.from('messages').insert([
+        {
+          conversation_id: conversation.id,
+          role: 'user',
+          content: question,
+        },
+        {
+          conversation_id: conversation.id,
+          role: 'assistant',
+          content: responseText,
+          citations: citations.length > 0 ? citations : null,
+        },
+      ]);
     }
 
     return NextResponse.json({
@@ -99,9 +134,6 @@ Please provide:
     });
   } catch (error) {
     console.error('Error in chat:', error);
-    return NextResponse.json(
-      { error: 'Failed to process question' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to process question' }, { status: 500 });
   }
 }

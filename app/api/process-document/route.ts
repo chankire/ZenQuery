@@ -1,27 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import mammoth from 'mammoth';
+import { createClient } from '@/lib/supabase/server';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-async function extractTextFromPDF(buffer: Buffer): Promise<{ text: string; pageMap: Map<number, string> }> {
-  // Use dynamic import for pdf-parse due to module compatibility
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
   const { pdf } = await import('pdf-parse');
   const data = await pdf(buffer);
-
-  // Create a page map for better citation tracking
-  const pageMap = new Map<number, string>();
-
-  // pdf-parse returns the text directly
-  const text = typeof data === 'string' ? data : data.text || '';
-
-  // Note: pdf-parse doesn't provide page-level extraction by default
-  // For production, consider using pdf.js directly for better page tracking
-  pageMap.set(1, text);
-
-  return { text, pageMap };
+  return typeof data === 'string' ? data : data.text || '';
 }
 
 async function extractTextFromDocx(buffer: Buffer): Promise<string> {
@@ -31,14 +20,21 @@ async function extractTextFromDocx(buffer: Buffer): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
+    // Check authentication
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
 
     if (!file) {
-      return NextResponse.json(
-        { error: 'No file uploaded' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
     // Convert file to buffer
@@ -50,25 +46,29 @@ export async function POST(request: NextRequest) {
     const fileType = file.type;
 
     if (fileType === 'application/pdf') {
-      const result = await extractTextFromPDF(buffer);
-      extractedText = result.text;
+      extractedText = await extractTextFromPDF(buffer);
     } else if (
       fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
       fileType === 'application/msword'
     ) {
       extractedText = await extractTextFromDocx(buffer);
     } else {
-      return NextResponse.json(
-        { error: 'Unsupported file type' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
     }
 
-    // Store the extracted text and file buffer
-    global.documentCache = global.documentCache || {};
-    global.documentCache[file.name] = extractedText;
-    global.fileCache = global.fileCache || {};
-    global.fileCache[file.name] = buffer;
+    // Upload file to Supabase Storage
+    const fileName = `${user.id}/${Date.now()}_${file.name}`;
+    const { error: uploadError } = await supabase.storage
+      .from('documents')
+      .upload(fileName, buffer, {
+        contentType: fileType,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error('Storage upload error:', uploadError);
+      return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
+    }
 
     // Generate executive summary using Claude
     const message = await anthropic.messages.create({
@@ -92,28 +92,39 @@ ${extractedText.slice(0, 100000)}`,
       ],
     });
 
-    const summary = message.content[0].type === 'text'
-      ? message.content[0].text
-      : 'Unable to generate summary';
+    const summary =
+      message.content[0].type === 'text' ? message.content[0].text : 'Unable to generate summary';
+
+    // Save document metadata to database
+    const { data: document, error: dbError } = await supabase
+      .from('documents')
+      .insert({
+        user_id: user.id,
+        file_name: file.name,
+        file_size: file.size,
+        file_type: fileType,
+        storage_path: fileName,
+        extracted_text: extractedText,
+        summary,
+      })
+      .select()
+      .single();
+
+    if (dbError) {
+      console.error('Database error:', dbError);
+      return NextResponse.json({ error: 'Failed to save document' }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
       summary,
+      documentId: document.id,
       fileName: file.name,
     });
   } catch (error) {
     console.error('Error processing document:', error);
-    return NextResponse.json(
-      { error: 'Failed to process document' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to process document' }, { status: 500 });
   }
-}
-
-// Type declaration for global cache
-declare global {
-  var documentCache: { [key: string]: string };
-  var fileCache: { [key: string]: Buffer };
 }
 
 export const config = {

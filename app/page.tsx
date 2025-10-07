@@ -1,14 +1,41 @@
 'use client';
 
-import { useState } from 'react';
-import { Sparkles, FileText, MessageSquare, Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Sparkles, FileText, MessageSquare, Zap, LogOut } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
 import FileUpload from '@/components/FileUpload';
 import DocumentChat from '@/components/DocumentChat';
+import type { User } from '@supabase/supabase-js';
 
 export default function Home() {
+  const [user, setUser] = useState<User | null>(null);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [summary, setSummary] = useState<string>('');
+  const [documentId, setDocumentId] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const supabase = createClient();
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = '/login';
+  };
 
   const handleFileUpload = async (file: File) => {
     setUploadedFile(file);
@@ -25,6 +52,7 @@ export default function Home() {
 
       const data = await response.json();
       setSummary(data.summary);
+      setDocumentId(data.documentId);
     } catch (error) {
       console.error('Error processing document:', error);
     } finally {
@@ -34,6 +62,33 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 dark:from-slate-950 dark:via-slate-900 dark:to-indigo-950">
+      {/* Top Bar with User Info */}
+      {user && (
+        <div className="border-b border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm">
+          <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center">
+                <span className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                  {user.email?.[0].toUpperCase()}
+                </span>
+              </div>
+              <span className="text-sm text-slate-700 dark:text-slate-300">
+                {user.email}
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="gap-2"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Hero Section */}
       {!uploadedFile && (
         <div className="container mx-auto px-4 py-16">
@@ -108,15 +163,17 @@ export default function Home() {
       )}
 
       {/* Document Chat Interface */}
-      {uploadedFile && (
+      {uploadedFile && documentId && (
         <DocumentChat
           fileName={uploadedFile.name}
-          fileUrl={`/api/get-file?fileName=${encodeURIComponent(uploadedFile.name)}`}
+          documentId={documentId}
+          fileUrl={`/api/get-file?documentId=${documentId}`}
           summary={summary}
           isProcessing={isProcessing}
           onReset={() => {
             setUploadedFile(null);
             setSummary('');
+            setDocumentId('');
           }}
         />
       )}
