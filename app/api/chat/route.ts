@@ -53,7 +53,7 @@ CRITICAL RULES:
 6. If you're uncertain, say so - never hallucinate or guess
 
 Document content:
-${document.extracted_text.slice(0, 100000)}
+${document.extracted_text.slice(0, 500000)}
 
 ---
 

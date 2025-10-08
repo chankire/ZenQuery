@@ -92,7 +92,7 @@ Be concise but thorough. Format with clear paragraphs.
 
 Document content:
 
-${extractedText.slice(0, 100000)}`,
+${extractedText.slice(0, 500000)}`,
         },
       ],
     });
