@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import mammoth from 'mammoth';
 import { createClient } from '@/lib/supabase/server';
+import { put } from '@vercel/blob';
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -56,18 +57,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unsupported file type' }, { status: 400 });
     }
 
-    // Upload file to Supabase Storage
+    // Upload file to Vercel Blob Storage
     const fileName = `${user.id}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await supabase.storage
-      .from('documents')
-      .upload(fileName, buffer, {
-        contentType: fileType,
-        upsert: false,
-      });
+    let blobUrl = '';
 
-    if (uploadError) {
+    try {
+      const blob = await put(fileName, buffer, {
+        access: 'public',
+        contentType: fileType,
+      });
+      blobUrl = blob.url;
+    } catch (uploadError) {
       console.error('Storage upload error:', uploadError);
-      return NextResponse.json({ error: 'Failed to upload file' }, { status: 500 });
+      return NextResponse.json({
+        error: 'Failed to upload file to storage',
+        details: uploadError instanceof Error ? uploadError.message : undefined
+      }, { status: 500 });
     }
 
     // Generate executive summary using Claude
@@ -103,7 +108,7 @@ ${extractedText.slice(0, 100000)}`,
         file_name: file.name,
         file_size: file.size,
         file_type: fileType,
-        storage_path: fileName,
+        storage_path: blobUrl, // Store the Vercel Blob URL
         extracted_text: extractedText,
         summary,
       })

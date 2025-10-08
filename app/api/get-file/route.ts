@@ -31,27 +31,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Document not found' }, { status: 404 });
     }
 
-    // Download file from Supabase Storage
-    const { data: fileData, error: storageError } = await supabase.storage
-      .from('documents')
-      .download(document.storage_path);
+    // Fetch file from Vercel Blob (storage_path now contains the blob URL)
+    const blobUrl = document.storage_path;
 
-    if (storageError || !fileData) {
-      console.error('Storage error:', storageError);
-      return NextResponse.json({ error: 'Failed to retrieve file' }, { status: 500 });
+    try {
+      const response = await fetch(blobUrl);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch file from blob storage');
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // Return the file
+      return new NextResponse(uint8Array, {
+        headers: {
+          'Content-Type': document.file_type || 'application/pdf',
+          'Content-Disposition': `inline; filename="${document.file_name}"`,
+        },
+      });
+    } catch (fetchError) {
+      console.error('Blob fetch error:', fetchError);
+      return NextResponse.json({ error: 'Failed to retrieve file from storage' }, { status: 500 });
     }
-
-    // Convert Blob to ArrayBuffer then to Uint8Array
-    const arrayBuffer = await fileData.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-
-    // Return the PDF file
-    return new NextResponse(uint8Array, {
-      headers: {
-        'Content-Type': document.file_type || 'application/pdf',
-        'Content-Disposition': `inline; filename="${document.file_name}"`,
-      },
-    });
   } catch (error) {
     console.error('Error retrieving file:', error);
     return NextResponse.json({ error: 'Failed to retrieve file' }, { status: 500 });

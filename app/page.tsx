@@ -51,10 +51,20 @@ export default function Home() {
       });
 
       const data = await response.json();
+
+      if (!response.ok) {
+        alert(`Error: ${data.error}\n${data.details || ''}`);
+        setUploadedFile(null);
+        setIsProcessing(false);
+        return;
+      }
+
       setSummary(data.summary);
       setDocumentId(data.documentId);
     } catch (error) {
       console.error('Error processing document:', error);
+      alert('Failed to process document. Please try again.');
+      setUploadedFile(null);
     } finally {
       setIsProcessing(false);
     }
